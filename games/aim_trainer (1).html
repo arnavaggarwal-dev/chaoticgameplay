@@ -499,10 +499,6 @@ canvas.addEventListener('mousedown', function(e){
   e.preventDefault();
   if (e.button === 2) toggleMode();
 });
-window.addEventListener("SpeechResult", function(e){
-  if (e.detail === 'bang') shoot();
-
-});
 canvas.addEventListener('mouseup',     function(){ dragging=false; });
 canvas.addEventListener('contextmenu', function(e){ e.preventDefault(); });
 
@@ -605,20 +601,32 @@ window.addEventListener('resize', function(){
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
-//Voice shoot
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (SR) {
-  const rec = new SR();
-  rec.continuous = true;
-  rec.interimResults = false;
-  rec.onresult = (e) => {
-    const word = e.results[e.results.length - 1][0].transcript.trim().toLowerCase();
-    if (word.includes('bang')) window.dispatchEvent(new CustomeEvent("SpeechResult", { detail: "bang"}));
+// Sound-triggered shooting
+navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+  const ctx = new AudioContext();
+  const source = ctx.createMediaStreamSource(stream);
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 256;
+  source.connect(analyser);
 
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  let lastShot = 0;
+  const THRESHOLD = 240;
+  const COOLDOWN = 500;
+
+  const detect = () => {
+    requestAnimationFrame(detect);
+    analyser.getByteFrequencyData(data);
+    const peak = Math.max(...data);
+    const now = Date.now();
+    if (peak > THRESHOLD && now - lastShot > COOLDOWN) {
+      lastShot = now;
+      shoot();
+    }
   };
-  rec.onend = () =>rec.start();
-  rec.start;
-}
+
+  detect();
+}).catch(e => console.warn('Mic denied:', e));
 </script>
 </body>
 </html>
