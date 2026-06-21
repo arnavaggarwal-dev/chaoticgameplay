@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gallery</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: #0a0a0a;
+        color: #f0f0f0;
+        font-family: monospace;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      #home {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        gap: 2rem;
+      }
+
+      #enter-btn {
+        position: fixed;
+        padding: 1rem 2.5rem;
+        font-size: 1.2rem;
+        font-family: monospace;
+        background: transparent;
+        color: #f0f0f0;
+        border: 1px solid #f0f0f0;
+        cursor: pointer;
+        transition: left 0.08s ease, top 0.08s ease;
+      }
+
+      #enter-btn:hover {
+        background: #f0f0f0;
+        color: #0a0a0a;
+      }
+
+      #gallery {
+        padding: 2rem;
+      }
+
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="home">
+      <h1>welcome.</h1>
+      <button id="enter-btn">enter</button>
+    </div>
+
+    <div id="gallery" class="hidden">
+      <h1>gallery</h1>
+      <!-- your stuff goes here later -->
+    </div>
+
+    <script>
+      const btn = document.getElementById('enter-btn');
+      const home = document.getElementById('home');
+      const gallery = document.getElementById('gallery');
+
+      btn.style.left = (window.innerWidth / 2 - btn.offsetWidth / 2) + 'px';
+      btn.style.top = (window.innerHeight / 2 - btn.offsetHeight / 2) + 'px';
+
+      let tired = false;
+
+      setTimeout(() => {
+        tired = true;
+        btn.textContent = 'fine.';
+      }, 12000);
+
+      document.addEventListener('mousemove', (e) => {
+        if (tired) return;
+
+        const rect = btn.getBoundingClientRect();
+        const btnCenterX = rect.left + rect.width / 2;
+        const btnCenterY = rect.top + rect.height / 2;
+
+        const dist = Math.hypot(e.clientX - btnCenterX, e.clientY - btnCenterY);
+
+        if (dist < 160) {
+          const newX = Math.random() * (window.innerWidth - rect.width);
+          const newY = Math.random() * (window.innerHeight - rect.height);
+          btn.style.left = newX + 'px';
+          btn.style.top = newY + 'px';
+        }
+      });
+
+      btn.addEventListener('click', () => {
+        home.style.display = 'none';
+        gallery.classList.remove('hidden');
+      });
+    </script>
+  </body>
+</html>
