@@ -2,6 +2,7 @@ HELLO MY FELLOW MASOCHISTS!!!!!!!!!!
 THIS IS A GAME LIBRARY OF TRULY STUPID AND CHAOTIC GAMES!!!
 EVERYTHONG HERE IS SO GODDAMN STUPID!!(not yet, just got main menu on)
 
-## 🎮 WANNA FIGHT ME?? PLAY ROCK PAPER SCISSORS!!!
-### I AM A BOT AND I WILL DESTROY YOU (probably)
-Comment 🪨, 📄, or ✂️ on [THIS ISSUE](../../issues/1) IF YOU DARE!!!
+### ⚠️ WARNING: 
+## Playing these games may cause loss of braincells, 
+## existential dread, and uncontrollable laughter. We are not responsible 
+### for any damage to your sanity.
