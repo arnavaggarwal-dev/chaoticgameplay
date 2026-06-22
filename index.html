@@ -6,15 +6,13 @@
     <title>Chaotic Gameplay</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-
       body {
         background: #0a0a0a;
         color: #f0f0f0;
         font-family: monospace;
-        min-height: 100vh;
         overflow: hidden;
+        height: 100vh;
       }
-
       #home {
         display: flex;
         flex-direction: column;
@@ -23,13 +21,7 @@
         height: 100vh;
         gap: 2rem;
       }
-
-      #home h1 {
-        font-size: 2rem;
-        letter-spacing: 0.2em;
-        opacity: 0.8;
-      }
-
+      #home h1 { font-size: 2rem; letter-spacing: 0.2em; opacity: 0.8; }
       #enter-btn {
         position: fixed;
         padding: 1rem 2.5rem;
@@ -41,84 +33,63 @@
         cursor: pointer;
         transition: left 0.08s ease, top 0.08s ease;
       }
-
-      #enter-btn:hover {
-        background: #f0f0f0;
-        color: #0a0a0a;
-      }
-
+      #enter-btn:hover { background: #f0f0f0; color: #0a0a0a; }
       #gallery {
         display: none;
         position: fixed;
         inset: 0;
       }
-
-      #gallery h1 {
+      #gallery-title {
         font-size: 1rem;
         letter-spacing: 0.2em;
         opacity: 0.3;
         text-align: center;
         padding: 1.5rem;
+        pointer-events: none;
+        position: relative;
+        z-index: 10;
       }
-
       .card {
         border: 1px solid rgba(255,255,255,0.1);
         padding: 2rem;
         cursor: grab;
-        text-decoration: none;
         color: #f0f0f0;
         display: block;
         position: absolute;
         width: 260px;
         background: #0a0a0a;
         user-select: none;
-        will-change: transform;
+        transform-origin: center center;
+        -webkit-user-drag: none;
       }
-
-      .card-tag {
-        font-size: 0.65rem;
-        letter-spacing: 0.15em;
-        opacity: 0.35;
-        text-transform: uppercase;
-        margin-bottom: 0.75rem;
-      }
-
-      .card-title {
-        font-size: 1.1rem;
-        margin-bottom: 0.5rem;
-        font-weight: bold;
-      }
-
-      .card-desc {
-        font-size: 0.78rem;
-        opacity: 0.45;
-        line-height: 1.6;
-      }
+      .card:active { cursor: grabbing; }
+      .card-tag { font-size: 0.65rem; letter-spacing: 0.15em; opacity: 0.35; text-transform: uppercase; margin-bottom: 0.75rem; }
+      .card-title { font-size: 1.1rem; margin-bottom: 0.5rem; font-weight: bold; }
+      .card-desc { font-size: 0.78rem; opacity: 0.45; line-height: 1.6; }
     </style>
   </head>
   <body>
-
     <div id="home">
       <h1>chaotic gameplay.</h1>
       <button id="enter-btn">enter</button>
     </div>
 
     <div id="gallery">
-      <h1>// games</h1>
-      <a class="card" href="games/aim_trainer.html" target="_blank">
+      <div id="gallery-title">// games</div>
+      <div class="card" id="card-0" data-href="games/aim_trainer.html" draggable="false">
         <div class="card-tag">shooter · 3d</div>
         <div class="card-title">Aim Trainer</div>
         <div class="card-desc">Train your aim against moving targets. Say "bang" to shoot. 60 seconds.</div>
-      </a>
-      <a class="card" href="games/dead_zone.html" target="_blank">
+      </div>
+      <div class="card" id="card-1" data-href="games/dead_zone.html" draggable="false">
         <div class="card-tag">fps · top-down</div>
         <div class="card-title">Dead Zone</div>
         <div class="card-desc">Survive waves of enemies in a post-apocalyptic dead zone. Say "bang" to shoot.</div>
-      </a>
+      </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <script>
-      // ── Enter button ──────────────────────────────────────────
       const btn     = document.getElementById('enter-btn');
       const home    = document.getElementById('home');
       const gallery = document.getElementById('gallery');
@@ -127,182 +98,134 @@
       btn.style.top  = (window.innerHeight / 2 - btn.offsetHeight / 2) + 'px';
 
       let tired = false, started = false;
-
       document.addEventListener('mousemove', (e) => {
         if (tired) return;
         const r  = btn.getBoundingClientRect();
-        const cx = r.left + r.width  / 2;
-        const cy = r.top  + r.height / 2;
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
         if (Math.hypot(e.clientX - cx, e.clientY - cy) < 160) {
           if (!started) {
             started = true;
-            setTimeout(() => { tired = true; btn.textContent = 'fine.'; },
-              5000 + Math.random() * 15000);
+            setTimeout(() => { tired = true; btn.textContent = 'fine.'; }, 5000 + Math.random() * 15000);
           }
-          btn.style.left = (Math.random() * (window.innerWidth  - r.width))  + 'px';
-          btn.style.top  = (Math.random() * (window.innerHeight - r.height)) + 'px';
+          btn.style.left = Math.random() * (window.innerWidth  - r.width)  + 'px';
+          btn.style.top  = Math.random() * (window.innerHeight - r.height) + 'px';
         }
       });
 
       btn.addEventListener('click', () => {
-        home.style.display    = 'none';
+        home.style.display = 'none';
         gallery.style.display = 'block';
-        initCards();
+        initPhysics();
       });
 
-      // ── Card physics ──────────────────────────────────────────
-      function initCards() {
-        const GRAVITY = 600;
-        const DAMPING = 0.994;
-        const VW      = window.innerWidth;
+      function initPhysics() {
+        const { Engine, Runner, Bodies, Body, World, Events, Mouse, MouseConstraint } = Matter;
 
-        const cards = document.querySelectorAll('.card');
+        const VW = window.innerWidth;
+        const VH = window.innerHeight;
 
-        const positions = [
-          { left: VW * 0.2 - 130, top: 120 },
-          { left: VW * 0.6 - 130, top: 120 },
+        const cardEls = Array.from(document.querySelectorAll('.card'));
+        const W = cardEls[0].offsetWidth;
+        const H = cardEls[0].offsetHeight;
+
+        const engine = Engine.create({ gravity: { y: 2.5 }, enableSleeping: false });
+        const world  = engine.world;
+
+        // Thick walls to prevent tunneling
+        const THICK = 500;
+        World.add(world, [
+
+          Bodies.rectangle(VW/2,        VH + THICK/2,      VW*3,  THICK, { isStatic: true, friction: 0.5, restitution: 0.45 }),
+      
+          Bodies.rectangle(-THICK/2,    VH/2,              THICK, VH*3,  { isStatic: true, friction: 0.2, restitution: 0.2  }),
+
+          Bodies.rectangle(VW+THICK/2,  VH/2,              THICK, VH*3,  { isStatic: true, friction: 0.2, restitution: 0.2  }),
+    
+          Bodies.rectangle(VW/2,        -1700 - THICK/2,    VW*3,  THICK, { isStatic: true, friction: 0.2, restitution: 0.3  }),
+        ]);
+
+        const startPos = [
+          { x: VW * 0.28, y: 160 + H/2 },
+          { x: VW * 0.68, y: 160 + H/2 },
         ];
 
-        cards.forEach((card, i) => {
-          // Fixed card position
-          card.style.left = positions[i].left + 'px';
-          card.style.top  = positions[i].top  + 'px';
-
-          const W = card.offsetWidth;
-          const H = card.offsetHeight;
-
-          // Random pivot within card, saved for session
-          const pivKey = 'piv_' + i;
-          let piv = sessionStorage.getItem(pivKey);
-          if (!piv) {
-            piv = JSON.stringify({
-              x: W * (0.15 + Math.random() * 0.7),
-              y: H * (0.15 + Math.random() * 0.7)
-            });
-            sessionStorage.setItem(pivKey, piv);
-          }
-          piv = JSON.parse(piv);
-          const lpx = piv.x;
-          const lpy = piv.y;
-
-          card.style.transformOrigin = lpx + 'px ' + lpy + 'px';
-
-          // Nail in screen coords — read BEFORE any rotation
-          const rect = card.getBoundingClientRect();
-          const nailX = rect.left + lpx;
-          const nailY = rect.top  + lpy;
-
-          // CM relative to pivot
-          const cmX = W / 2 - lpx;
-          const cmY = H / 2 - lpy;
-          const L   = Math.sqrt(cmX * cmX + cmY * cmY) || 1;
-
-          // Rest angle: CM directly below pivot
-          const restAngle = Math.atan2(-cmX, cmY);
-
-          let angle     = restAngle;
-          let angleVel  = 0;
-          let dragging  = false;
-          let active    = false; // only simulate when hovered or dragging
-
-          let dragAngle0 = 0;
-          let dragMouse0 = 0;
-          let prevMouse  = 0;
-          let prevT      = 0;
-
-          function mouseAngle(cx, cy) {
-            return Math.atan2(cx - nailX, cy - nailY);
-          }
-
-          // Hover — kick into motion
-          card.addEventListener('mouseenter', () => {
-            if (!active) {
-              active   = true;
-              angleVel = (Math.random() - 0.5) * 4;
-            }
+        const cards = cardEls.map((el, i) => {
+          const body = Bodies.rectangle(startPos[i].x, startPos[i].y, W, H, {
+            isStatic:    true,
+            restitution: 0.55,
+            friction:    0.3,
+            frictionAir: 0.012,
+            density:     0.002,
           });
-
-          // Drag
-          function onDown(cx, cy) {
-            dragging   = true;
-            active     = true;
-            dragAngle0 = angle;
-            dragMouse0 = mouseAngle(cx, cy);
-            prevMouse  = dragMouse0;
-            prevT      = performance.now();
-            angleVel   = 0;
-            card.style.cursor = 'grabbing';
-          }
-
-          function onMove(cx, cy) {
-            if (!dragging) return;
-            const ma = mouseAngle(cx, cy);
-            angle = dragAngle0 - (ma - dragMouse0);
-            card.style.transform = `rotate(${angle}rad)`;
-            const now = performance.now();
-            const dt  = (now - prevT) / 1000;
-            if (dt > 0.001) {
-              angleVel  = -(ma - prevMouse) / dt;
-              prevMouse = ma;
-              prevT     = now;
-            }
-          }
-
-          function onUp() {
-            if (!dragging) return;
-            dragging = false;
-            card.style.cursor = 'grab';
-          }
-
-          card.addEventListener('mousedown',  (e) => { onDown(e.clientX, e.clientY); e.preventDefault(); });
-          card.addEventListener('touchstart', (e) => { onDown(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); }, { passive: false });
-          document.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
-          document.addEventListener('touchmove', (e) => {
-            if (!dragging) return;
-            onMove(e.touches[0].clientX, e.touches[0].clientY);
-            e.preventDefault();
-          }, { passive: false });
-          document.addEventListener('mouseup',  onUp);
-          document.addEventListener('touchend', onUp);
-
-          card.addEventListener('click', (e) => {
-            if (Math.abs(angle - restAngle) > 0.12 || Math.abs(angleVel) > 0.4)
-              e.preventDefault();
-          });
-
-          // Physics tick
-          const omega2 = GRAVITY / L;
-          let last = performance.now();
-
-          function tick(now) {
-            requestAnimationFrame(tick);
-
-            const dt = Math.min((now - last) / 1000, 0.05);
-            last = now;
-
-            if (!active) return;
-            if (dragging) return;
-
-            const acc = -omega2 * Math.sin(angle - restAngle);
-            angleVel  = (angleVel + acc * dt) * Math.pow(DAMPING, dt * 60);
-            angle    += angleVel * dt;
-
-            card.style.transform = `rotate(${angle}rad)`;
-
-            // Settle back to rest and freeze
-            if (Math.abs(angleVel) < 0.001 && Math.abs(angle - restAngle) < 0.001) {
-              active   = false;
-              angle    = restAngle;
-              angleVel = 0;
-              card.style.transform = `rotate(${restAngle}rad)`;
-            }
-          }
-
-          // Apply rest rotation immediately so card looks normal
-          card.style.transform = `rotate(${restAngle}rad)`;
-
-          requestAnimationFrame(tick);
+          World.add(world, body);
+          el.style.left = (startPos[i].x - W/2) + 'px';
+          el.style.top  = (startPos[i].y - H/2) + 'px';
+          return { body, el, dropped: false };
         });
+
+        const mouse = Mouse.create(document.documentElement);
+        const mc = MouseConstraint.create(engine, {
+          mouse,
+          constraint: { stiffness: 0.2, damping: 0.1, render: { visible: false } },
+        });
+        World.add(world, mc);
+
+        let isDragging = false;
+        Events.on(mc, 'startdrag', () => { isDragging = true; });
+        Events.on(mc, 'enddrag', (e) => {
+          setTimeout(() => { isDragging = false; }, 80);
+          if (!e.body) return;
+          const MAX = 30;
+          const vel = e.body.velocity;
+          const spd = Math.hypot(vel.x, vel.y);
+          if (spd > MAX) Body.setVelocity(e.body, { x: vel.x/spd*MAX, y: vel.y/spd*MAX });
+        });
+
+        cardEls.forEach((el, i) => {
+          el.addEventListener('mouseenter', () => {
+            const c = cards[i];
+            if (!c.dropped) {
+              c.dropped = true;
+              Body.setStatic(c.body, false);
+              Body.setVelocity(c.body, { x: (Math.random() - 0.5) * 3, y: 0.5 });
+              Body.setAngularVelocity(c.body, (Math.random() - 0.5) * 0.15);
+            }
+          });
+
+          el.addEventListener('click', () => {
+            if (isDragging) return;
+            const vel = cards[i].body.velocity;
+            const moving = Math.abs(vel.x) > 0.8 || Math.abs(vel.y) > 0.8
+                        || Math.abs(cards[i].body.angularVelocity) > 0.05;
+            if (!moving) {
+              const a = document.createElement('a');
+              a.href = el.dataset.href;
+              a.target = '_blank';
+              a.rel = 'noopener';
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+            }
+          });
+        });
+
+        Events.on(engine, 'afterUpdate', () => {
+          cards.forEach(({ body, el, dropped }) => {
+            if (!dropped) return;
+
+            // Clamp velocity every frame to prevent tunneling
+            const MAX = 35;
+            const spd = Math.hypot(body.velocity.x, body.velocity.y);
+            if (spd > MAX) Body.setVelocity(body, { x: body.velocity.x/spd*MAX, y: body.velocity.y/spd*MAX });
+
+            const { x, y } = body.position;
+            el.style.left      = (x - W/2) + 'px';
+            el.style.top       = (y - H/2) + 'px';
+            el.style.transform = `rotate(${body.angle}rad)`;
+          });
+        });
+
+        Runner.run(Runner.create(), engine);
       }
     </script>
   </body>
