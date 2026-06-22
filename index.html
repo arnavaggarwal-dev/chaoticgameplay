@@ -5,18 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chaotic Gameplay</title>
     <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
 
       body {
         background: #0a0a0a;
         color: #f0f0f0;
         font-family: monospace;
         min-height: 100vh;
-        overflow-x: hidden;
+        overflow: hidden;
       }
 
       #home {
@@ -52,39 +48,31 @@
       }
 
       #gallery {
-        padding: 4rem 2rem;
         display: none;
+        position: fixed;
+        inset: 0;
       }
 
       #gallery h1 {
-        font-size: 1.2rem;
+        font-size: 1rem;
         letter-spacing: 0.2em;
-        opacity: 0.4;
-        margin-bottom: 3rem;
+        opacity: 0.3;
         text-align: center;
-      }
-
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 1.5rem;
-        max-width: 1000px;
-        margin: 0 auto;
+        padding: 1.5rem;
       }
 
       .card {
         border: 1px solid rgba(255,255,255,0.1);
         padding: 2rem;
-        cursor: pointer;
-        transition: border-color 0.2s, background 0.2s;
+        cursor: grab;
         text-decoration: none;
         color: #f0f0f0;
         display: block;
-      }
-
-      .card:hover {
-        border-color: rgba(255,255,255,0.5);
-        background: rgba(255,255,255,0.03);
+        position: absolute;
+        width: 260px;
+        background: #0a0a0a;
+        user-select: none;
+        will-change: transform;
       }
 
       .card-tag {
@@ -96,23 +84,20 @@
       }
 
       .card-title {
-        font-size: 1.2rem;
+        font-size: 1.1rem;
         margin-bottom: 0.5rem;
         font-weight: bold;
       }
 
       .card-desc {
-        font-size: 0.8rem;
+        font-size: 0.78rem;
         opacity: 0.45;
         line-height: 1.6;
-      }
-
-      .hidden {
-        display: none;
       }
     </style>
   </head>
   <body>
+
     <div id="home">
       <h1>chaotic gameplay.</h1>
       <button id="enter-btn">enter</button>
@@ -120,61 +105,205 @@
 
     <div id="gallery">
       <h1>// games</h1>
-      <div class="grid">
-        <a class="card" href="games/aim_trainer.html" target="_blank">
-          <div class="card-tag">shooter · 3d</div>
-          <div class="card-title">Aim Trainer</div>
-          <div class="card-desc">Train your aim against moving targets. Say "bang" to shoot. 60 seconds.</div>
-        </a>
-        <a class="card" href="games/dead_zone.html" target="_blank">
-          <div class="card-tag">fps · top-down</div>
-          <div class="card-title">Dead Zone</div>
-          <div class="card-desc">Survive waves of enemies in a post-apocalyptic dead zone. Say "bang" to shoot.</div>
-        </a>
-      </div>
+      <a class="card" href="games/aim_trainer.html" target="_blank">
+        <div class="card-tag">shooter · 3d</div>
+        <div class="card-title">Aim Trainer</div>
+        <div class="card-desc">Train your aim against moving targets. Say "bang" to shoot. 60 seconds.</div>
+      </a>
+      <a class="card" href="games/dead_zone.html" target="_blank">
+        <div class="card-tag">fps · top-down</div>
+        <div class="card-title">Dead Zone</div>
+        <div class="card-desc">Survive waves of enemies in a post-apocalyptic dead zone. Say "bang" to shoot.</div>
+      </a>
     </div>
 
     <script>
-      const btn = document.getElementById('enter-btn');
-      const home = document.getElementById('home');
+      // ── Enter button ──────────────────────────────────────────
+      const btn     = document.getElementById('enter-btn');
+      const home    = document.getElementById('home');
       const gallery = document.getElementById('gallery');
 
-      btn.style.left = (window.innerWidth / 2 - btn.offsetWidth / 2) + 'px';
-      btn.style.top = (window.innerHeight / 2 - btn.offsetHeight / 15) + 'px';
+      btn.style.left = (window.innerWidth  / 2 - btn.offsetWidth  / 2) + 'px';
+      btn.style.top  = (window.innerHeight / 2 - btn.offsetHeight / 2) + 'px';
 
-      let tired = false;
-      let started = false;
+      let tired = false, started = false;
 
       document.addEventListener('mousemove', (e) => {
         if (tired) return;
-
-        const rect = btn.getBoundingClientRect();
-        const btnCenterX = rect.left + rect.width / 2;
-        const btnCenterY = rect.top + rect.height / 2;
-
-        const dist = Math.hypot(e.clientX - btnCenterX, e.clientY - btnCenterY);
-
-        if (dist < 160) {
+        const r  = btn.getBoundingClientRect();
+        const cx = r.left + r.width  / 2;
+        const cy = r.top  + r.height / 2;
+        if (Math.hypot(e.clientX - cx, e.clientY - cy) < 160) {
           if (!started) {
             started = true;
-            const waitTime = Math.random() * (20000 - 5000) + 5000;
-            setTimeout(() => {
-              tired = true;
-              btn.textContent = 'fine.';
-            }, waitTime);
+            setTimeout(() => { tired = true; btn.textContent = 'fine.'; },
+              5000 + Math.random() * 15000);
           }
-
-          const newX = Math.random() * (window.innerWidth - rect.width);
-          const newY = Math.random() * (window.innerHeight - rect.height);
-          btn.style.left = newX + 'px';
-          btn.style.top = newY + 'px';
+          btn.style.left = (Math.random() * (window.innerWidth  - r.width))  + 'px';
+          btn.style.top  = (Math.random() * (window.innerHeight - r.height)) + 'px';
         }
       });
 
       btn.addEventListener('click', () => {
-        home.style.display = 'none';
+        home.style.display    = 'none';
         gallery.style.display = 'block';
+        initCards();
       });
+
+      // ── Card physics ──────────────────────────────────────────
+      function initCards() {
+        const GRAVITY = 600;
+        const DAMPING = 0.994;
+        const VW      = window.innerWidth;
+
+        const cards = document.querySelectorAll('.card');
+
+        const positions = [
+          { left: VW * 0.2 - 130, top: 120 },
+          { left: VW * 0.6 - 130, top: 120 },
+        ];
+
+        cards.forEach((card, i) => {
+          // Fixed card position
+          card.style.left = positions[i].left + 'px';
+          card.style.top  = positions[i].top  + 'px';
+
+          const W = card.offsetWidth;
+          const H = card.offsetHeight;
+
+          // Random pivot within card, saved for session
+          const pivKey = 'piv_' + i;
+          let piv = sessionStorage.getItem(pivKey);
+          if (!piv) {
+            piv = JSON.stringify({
+              x: W * (0.15 + Math.random() * 0.7),
+              y: H * (0.15 + Math.random() * 0.7)
+            });
+            sessionStorage.setItem(pivKey, piv);
+          }
+          piv = JSON.parse(piv);
+          const lpx = piv.x;
+          const lpy = piv.y;
+
+          card.style.transformOrigin = lpx + 'px ' + lpy + 'px';
+
+          // Nail in screen coords — read BEFORE any rotation
+          const rect = card.getBoundingClientRect();
+          const nailX = rect.left + lpx;
+          const nailY = rect.top  + lpy;
+
+          // CM relative to pivot
+          const cmX = W / 2 - lpx;
+          const cmY = H / 2 - lpy;
+          const L   = Math.sqrt(cmX * cmX + cmY * cmY) || 1;
+
+          // Rest angle: CM directly below pivot
+          const restAngle = Math.atan2(-cmX, cmY);
+
+          let angle     = restAngle;
+          let angleVel  = 0;
+          let dragging  = false;
+          let active    = false; // only simulate when hovered or dragging
+
+          let dragAngle0 = 0;
+          let dragMouse0 = 0;
+          let prevMouse  = 0;
+          let prevT      = 0;
+
+          function mouseAngle(cx, cy) {
+            return Math.atan2(cx - nailX, cy - nailY);
+          }
+
+          // Hover — kick into motion
+          card.addEventListener('mouseenter', () => {
+            if (!active) {
+              active   = true;
+              angleVel = (Math.random() - 0.5) * 4;
+            }
+          });
+
+          // Drag
+          function onDown(cx, cy) {
+            dragging   = true;
+            active     = true;
+            dragAngle0 = angle;
+            dragMouse0 = mouseAngle(cx, cy);
+            prevMouse  = dragMouse0;
+            prevT      = performance.now();
+            angleVel   = 0;
+            card.style.cursor = 'grabbing';
+          }
+
+          function onMove(cx, cy) {
+            if (!dragging) return;
+            const ma = mouseAngle(cx, cy);
+            angle = dragAngle0 - (ma - dragMouse0);
+            card.style.transform = `rotate(${angle}rad)`;
+            const now = performance.now();
+            const dt  = (now - prevT) / 1000;
+            if (dt > 0.001) {
+              angleVel  = -(ma - prevMouse) / dt;
+              prevMouse = ma;
+              prevT     = now;
+            }
+          }
+
+          function onUp() {
+            if (!dragging) return;
+            dragging = false;
+            card.style.cursor = 'grab';
+          }
+
+          card.addEventListener('mousedown',  (e) => { onDown(e.clientX, e.clientY); e.preventDefault(); });
+          card.addEventListener('touchstart', (e) => { onDown(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); }, { passive: false });
+          document.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
+          document.addEventListener('touchmove', (e) => {
+            if (!dragging) return;
+            onMove(e.touches[0].clientX, e.touches[0].clientY);
+            e.preventDefault();
+          }, { passive: false });
+          document.addEventListener('mouseup',  onUp);
+          document.addEventListener('touchend', onUp);
+
+          card.addEventListener('click', (e) => {
+            if (Math.abs(angle - restAngle) > 0.12 || Math.abs(angleVel) > 0.4)
+              e.preventDefault();
+          });
+
+          // Physics tick
+          const omega2 = GRAVITY / L;
+          let last = performance.now();
+
+          function tick(now) {
+            requestAnimationFrame(tick);
+
+            const dt = Math.min((now - last) / 1000, 0.05);
+            last = now;
+
+            if (!active) return;
+            if (dragging) return;
+
+            const acc = -omega2 * Math.sin(angle - restAngle);
+            angleVel  = (angleVel + acc * dt) * Math.pow(DAMPING, dt * 60);
+            angle    += angleVel * dt;
+
+            card.style.transform = `rotate(${angle}rad)`;
+
+            // Settle back to rest and freeze
+            if (Math.abs(angleVel) < 0.001 && Math.abs(angle - restAngle) < 0.001) {
+              active   = false;
+              angle    = restAngle;
+              angleVel = 0;
+              card.style.transform = `rotate(${restAngle}rad)`;
+            }
+          }
+
+          // Apply rest rotation immediately so card looks normal
+          card.style.transform = `rotate(${restAngle}rad)`;
+
+          requestAnimationFrame(tick);
+        });
+      }
     </script>
   </body>
 </html>
