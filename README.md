@@ -7,6 +7,4 @@ EVERYTHONG HERE IS SO GODDAMN STUPID!!(not yet, just got main menu on)
 ### ⚠️ WARNING: 
 ## Playing these games may cause loss of braincells, 
 ## existential dread, and uncontrollable laughter. We are not responsible 
-## for any damage to your sanity.
-
-![visitors](https://visitor-badge.liteflare.com/badge?page_id=arnavaggarwal-dev.chaoticgameplay)
+## for any damage to your sanity!!!!!
