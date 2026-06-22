@@ -9,4 +9,4 @@ EVERYTHONG HERE IS SO GODDAMN STUPID!!(not yet, just got main menu on)
 ## existential dread, and uncontrollable laughter. I am not responsible 
 ## for any damage to your sanity!!!!!
 
-###### [PLAY HERE] (https://arnavaggarwal-dev.github.io/chaoticgameplay/)
+###### [PLAY HERE](https://arnavaggarwal-dev.github.io/chaoticgameplay/)
