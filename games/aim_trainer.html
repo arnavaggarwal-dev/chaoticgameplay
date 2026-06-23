@@ -559,7 +559,7 @@ navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
   source.connect(analyser);
   var data     = new Uint8Array(analyser.frequencyBinCount);
   var lastShot = 0;
-  var THRESHOLD = 240;
+  var THRESHOLD = 213;
   var COOLDOWN  = 500;
   var detect = function() {
     requestAnimationFrame(detect);

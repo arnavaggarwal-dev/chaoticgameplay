@@ -82,9 +82,12 @@
         <div class="card-desc">Say "bang" to shoot. 60 seconds.</div>
       </div>
       <div class="card" id="card-1" data-href="games/dead_zone.html" draggable="false">
-        <div class="card-tag"></div>
         <div class="card-title">Dead Zone</div>
         <div class="card-desc">Say "bang" to shoot.</div>
+      </div>
+      <div class="card" id="card-2" data-href="games/breakout.html" draggable="false">
+        <div class="card-title">Breakout</div>
+        <div class="card-desc">Just your average breakout game. Trust.</div>
       </div>
     </div>
 
@@ -145,8 +148,9 @@
         ]);
 
         const startPos = [
-          { x: VW * 0.28, y: 160 + H/2 },
-          { x: VW * 0.68, y: 160 + H/2 },
+          { x: VW * 0.20, y: 160 + H/2 },
+          { x: VW * 0.50, y: 160 + H/2 },
+          { x: VW * 0.80, y: 160 + H/2 },
         ];
 
         const cards = cardEls.map((el, i) => {
