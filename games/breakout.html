@@ -50,7 +50,8 @@ const BOX = 18, BOY = 55
 const BR = 7
 const BTW = 90, BTH = 34
 const SPD = 5.5
-const TRAIL = 14  // shorter trail = less draw calls
+const TRAIL = 12
+const PADDLE_SPEED = 7
 
 const canvas = document.getElementById('c')
 const ctx = canvas.getContext('2d')
@@ -66,7 +67,7 @@ const oMsg = document.getElementById('oMsg')
 let eng, runner, paddle, ball, bricks = []
 let running = false, done = false
 let mx = W/2, flashT
-let keys = { left: false, right: false }
+let keys = { left:false, right:false }
 let btnMode = false, t = 0
 let respawning = false, plays = 0, spent = 0
 let pieces = [], ballTrail = []
@@ -125,11 +126,11 @@ function makeWalls(e) {
 
 function initWorld() {
   if (eng) { Runner.stop(runner); Engine.clear(eng); World.clear(eng.world) }
-  eng = Engine.create({ gravity: { x:0, y:0 } })
+  eng = Engine.create({ gravity:{x:0,y:0} })
   runner = Runner.create()
   paddle = Bodies.rectangle(W/2, H-35, PW, PH, {
     isStatic:true, label:'paddle', restitution:1, friction:0, frictionStatic:0,
-    collisionFilter: { category:0x0001, mask:0x0002 }
+    collisionFilter:{ category:0x0001, mask:0x0002 }
   })
   World.add(eng.world, paddle)
   makeBricks(eng); makeWalls(eng)
@@ -141,9 +142,9 @@ function dropBall(e) {
   ball = Bodies.circle(W/2, H-70, BR, {
     label:'ball', restitution:1, friction:0, frictionAir:0, frictionStatic:0,
     inertia:Infinity, inverseInertia:0,
-    collisionFilter: { category:0x0002, mask:0x0001|0x0004|0x0008 }
+    collisionFilter:{ category:0x0002, mask:0x0001|0x0004|0x0008 }
   })
-  const a = (Math.random()*0.6+0.2)*Math.PI
+  const a=(Math.random()*0.6+0.2)*Math.PI
   Body.setVelocity(ball, { x:Math.cos(a)*SPD*(Math.random()>0.5?1:-1), y:-Math.abs(Math.sin(a)*SPD) })
   World.add(e.world, ball); ballTrail=[]
 }
@@ -163,13 +164,14 @@ function clampSpeed() {
   Body.setVelocity(ball,{x:vx,y:vy})
 }
 
-function corners(b, w, h) {
-  const c=Math.cos(b.angle), s=Math.sin(b.angle), hw=w/2, hh=h/2
+// returns corners of an OBB with given center+angle and dims
+function cornersOf(cx, cy, angle, w, h) {
+  const c=Math.cos(angle), s=Math.sin(angle), hw=w/2, hh=h/2
   return [
-    {x:b.x-hw*c+hh*s, y:b.y-hw*s-hh*c},
-    {x:b.x+hw*c+hh*s, y:b.y+hw*s-hh*c},
-    {x:b.x+hw*c-hh*s, y:b.y+hw*s+hh*c},
-    {x:b.x-hw*c-hh*s, y:b.y-hw*s+hh*c}
+    {x:cx-hw*c+hh*s, y:cy-hw*s-hh*c},
+    {x:cx+hw*c+hh*s, y:cy+hw*s-hh*c},
+    {x:cx+hw*c-hh*s, y:cy+hw*s+hh*c},
+    {x:cx-hw*c-hh*s, y:cy-hw*s+hh*c}
   ]
 }
 
@@ -230,7 +232,24 @@ function spawnPieces(n) {
     const el=makePiece(i,n,pw); wrap.appendChild(el)
     const ox=(i-(n-1)/2)*pw
     const a=n===1?-Math.PI/2:-Math.PI/2+(i/(n-1)-0.5)*spread
-    const p={x:W/2+ox,y:H/2+55,vx:Math.cos(a)*SPD,vy:Math.sin(a)*SPD,angle:0,av:0.08*(Math.random()>0.5?1:-1),w:pw,h:BTH,trail:[]}
+
+    // collision-box dims: shrink to match the pill's solid core, not the bounding rect.
+    // for the rounded ends, use the inscribed central rectangle (w - h, h) when possible.
+    // for narrow pieces where that goes negative, fall back to a small square ~h.
+    const colW = pw > BTH ? pw - BTH * 0.7 : BTH * 0.55
+    const colH = BTH * 0.88
+    // half-diagonal of the FULL bounding rect = max possible center-to-corner distance
+    // used for broadphase so rotated narrow pieces don't tunnel
+    const reach = Math.hypot(pw, BTH) / 2
+
+    const p = {
+      x: W/2+ox, y: H/2+55,
+      vx: Math.cos(a)*SPD, vy: Math.sin(a)*SPD,
+      angle: 0, av: 0.08*(Math.random()>0.5?1:-1),
+      w: pw, h: BTH,
+      colW, colH, reach,
+      trail: []
+    }
     el.style.left=p.x+'px'; el.style.top=p.y+'px'
     el.style.transform='translate(-50%,-50%) rotate(0rad)'
     pieces.push({p,el})
@@ -241,35 +260,45 @@ function respawnPiece(idx) {
   const pc=pieces[idx]; if (!pc) return
   spent++
   const a=-Math.PI/2+(Math.random()*0.6-0.3)
-  Object.assign(pc.p,{x:W/2,y:H-70,vx:Math.cos(a)*SPD,vy:Math.sin(a)*SPD,angle:0,av:0.05*(Math.random()>0.5?1:-1),trail:[]})
+  const p = pc.p
+  p.x=W/2; p.y=H-70
+  p.vx=Math.cos(a)*SPD; p.vy=Math.sin(a)*SPD
+  p.angle=0; p.av=0.05*(Math.random()>0.5?1:-1); p.trail=[]
+}
+
+function normSpeed(p) {
+  const s = Math.hypot(p.vx, p.vy)
+  if (s > 0) { p.vx = p.vx/s*SPD; p.vy = p.vy/s*SPD }
 }
 
 function stepPiece(p,idx) {
   p.trail.push({x:p.x,y:p.y})
   if (p.trail.length>TRAIL) p.trail.shift()
 
-  p.x+=p.vx; p.y+=p.vy; p.angle+=p.av
+  p.x+=p.vx; p.y+=p.vy
+  p.angle+=p.av
   p.av=Math.max(-0.45,Math.min(0.45,p.av*0.993))
 
   if (Math.abs(p.vx)<1.5) p.vx=1.5*(p.vx>=0?1:-1)
   if (Math.abs(p.vy)<1)   p.vy=1*(p.vy>=0?1:-1)
-  const spd=Math.hypot(p.vx,p.vy)
-  if (spd>0.1){p.vx=p.vx/spd*SPD;p.vy=p.vy/spd*SPD}
+  normSpeed(p)
 
-  const cs=corners(p,p.w,p.h)
+  // wall check uses FULL bounding rect (don't let the visual edge poke past)
+  const csFull = cornersOf(p.x, p.y, p.angle, p.w, p.h)
   let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity
-  for (const c of cs){x0=Math.min(x0,c.x);x1=Math.max(x1,c.x);y0=Math.min(y0,c.y);y1=Math.max(y1,c.y)}
+  for (const c of csFull){x0=Math.min(x0,c.x);x1=Math.max(x1,c.x);y0=Math.min(y0,c.y);y1=Math.max(y1,c.y)}
 
   let wh=false
   if(x0<0)  {p.x-=x0;    p.vx= Math.abs(p.vx);p.av+=p.vy*0.02;wh=true}
   if(x1>W)  {p.x-=(x1-W);p.vx=-Math.abs(p.vx);p.av-=p.vy*0.02;wh=true}
   if(y0<0)  {p.y-=y0;    p.vy= Math.abs(p.vy);p.av+=p.vx*0.02;wh=true}
   if(y1>H+20){respawnPiece(idx);return}
-  if(wh) jitterV(p)
+  if(wh) { jitterV(p); normSpeed(p) }
 
+  // paddle + brick use the SHRUNK box so curved corners don't fake-hit
   const pcx=paddle?paddle.position.x:W/2, pcy=H-35
-  const cs2=corners(p,p.w,p.h)
-  const ph=obbRect(cs2,p.angle,pcx,pcy,PW,PH)
+  const csCol = cornersOf(p.x, p.y, p.angle, p.colW, p.colH)
+  const ph=obbRect(csCol,p.angle,pcx,pcy,PW,PH)
   if(ph&&p.vy>-0.1){
     let nx=ph.nx,ny=ph.ny
     if(nx*(p.x-pcx)+ny*(p.y-pcy)<0){nx=-nx;ny=-ny}
@@ -277,22 +306,27 @@ function stepPiece(p,idx) {
     const dot=p.vx*nx+p.vy*ny
     if(dot<0){p.vx-=2*dot*nx;p.vy-=2*dot*ny}
     const rel=(p.x-pcx)/(PW/2); p.vx+=rel*1.5
-    const ns=Math.hypot(p.vx,p.vy)
-    if(ns>0){p.vx=p.vx/ns*SPD;p.vy=p.vy/ns*SPD}
-    p.av+=rel*0.25; jitterV(p)
+    normSpeed(p)
+    p.av+=rel*0.25; jitterV(p); normSpeed(p)
   }
 
-  const cs3=corners(p,p.w,p.h)
+  // brick broadphase: use full-rotation diagonal reach (was p.w/2 which is too small for rotated pieces!)
+  const csCol2 = cornersOf(p.x, p.y, p.angle, p.colW, p.colH)
   for (const bk of bricks) {
     if(!bk.gameData.alive) continue
     const bp=bk.position
-    const h=obbRect(cs3,p.angle,bp.x,bp.y,BW,BH); if(!h) continue
+    if (Math.abs(p.x-bp.x) > BW/2 + p.reach) continue
+    if (Math.abs(p.y-bp.y) > BH/2 + p.reach) continue
+    const h=obbRect(csCol2,p.angle,bp.x,bp.y,BW,BH); if(!h) continue
     let nx=h.nx,ny=h.ny
     if(nx*(p.x-bp.x)+ny*(p.y-bp.y)<0){nx=-nx;ny=-ny}
-    p.x+=nx*h.ov;p.y+=ny*h.ov
+    // cap push-out to avoid teleport if something else slipped
+    const ov = Math.min(h.ov, 8)
+    p.x+=nx*ov;p.y+=ny*ov
     const dot=p.vx*nx+p.vy*ny
     if(dot<0){p.vx-=2*dot*nx;p.vy-=2*dot*ny}
-    p.av+=(p.vx*(-ny)+p.vy*nx)*0.025; jitterV(p)
+    p.av += (p.vx*(-ny)+p.vy*nx)*0.025
+    jitterV(p); normSpeed(p)  // defensive renormalize
     if(bk.gameData.hits===0) bk.gameData.hits=1
     else{bk.gameData.alive=false;World.remove(eng.world,bk)}
     break
@@ -300,29 +334,33 @@ function stepPiece(p,idx) {
 }
 
 function pieceBounce() {
-  for (let i=0;i<pieces.length;i++) for (let j=i+1;j<pieces.length;j++) {
+  const n = pieces.length
+  if (n < 2) return
+  for (let i=0;i<n;i++) for (let j=i+1;j<n;j++) {
     const a=pieces[i].p, b=pieces[j].p
-    const dx=b.x-a.x, dy=b.y-a.y, reach=Math.max(a.w,a.h)+Math.max(b.w,b.h)
+    const dx=b.x-a.x, dy=b.y-a.y, reach=a.reach+b.reach
     if(dx*dx+dy*dy>reach*reach) continue
-    const ca=corners(a,a.w,a.h), cb=corners(b,b.w,b.h)
+    const ca=cornersOf(a.x,a.y,a.angle,a.colW,a.colH), cb=cornersOf(b.x,b.y,b.angle,b.colW,b.colH)
     const h=obbObb(ca,a.angle,cb,b.angle); if(!h) continue
     let nx=h.nx,ny=h.ny
     if(nx*(b.x-a.x)+ny*(b.y-a.y)<0){nx=-nx;ny=-ny}
-    a.x-=nx*h.ov*0.5;a.y-=ny*h.ov*0.5;b.x+=nx*h.ov*0.5;b.y+=ny*h.ov*0.5
+    const ov = Math.min(h.ov, 6)
+    a.x-=nx*ov*0.5;a.y-=ny*ov*0.5;b.x+=nx*ov*0.5;b.y+=ny*ov*0.5
     const van=a.vx*nx+a.vy*ny, vbn=b.vx*nx+b.vy*ny
     if(van-vbn<=0) continue
     a.vx+=(vbn-van)*nx;a.vy+=(vbn-van)*ny;b.vx+=(van-vbn)*nx;b.vy+=(van-vbn)*ny
-    const sa=Math.hypot(a.vx,a.vy);if(sa>0){a.vx=a.vx/sa*SPD;a.vy=a.vy/sa*SPD}
-    const sb=Math.hypot(b.vx,b.vy);if(sb>0){b.vx=b.vx/sb*SPD;b.vy=b.vy/sb*SPD}
+    normSpeed(a); normSpeed(b)
     a.av+=(Math.random()-0.5)*0.2;b.av+=(Math.random()-0.5)*0.2
-    jitterV(a);jitterV(b)
+    jitterV(a);jitterV(b); normSpeed(a); normSpeed(b)
   }
 }
 
 function syncDom() {
   for (const pc of pieces) {
-    pc.el.style.left=pc.p.x+'px'; pc.el.style.top=pc.p.y+'px'
-    pc.el.style.transform=`translate(-50%,-50%) rotate(${pc.p.angle}rad)`
+    const s = pc.el.style
+    s.left = pc.p.x+'px'
+    s.top  = pc.p.y+'px'
+    s.transform = `translate(-50%,-50%) rotate(${pc.p.angle}rad)`
   }
 }
 
@@ -363,15 +401,10 @@ function endGame(won) {
   flyBtn.onclick=()=>startGame(true)
 }
 
-const PADDLE_SPEED = 7
-
 function tick() {
   if(!running||done) return
-
-  // arrow key paddle movement
   if(keys.left)  mx = Math.max(PW/2, mx-PADDLE_SPEED)
   if(keys.right) mx = Math.min(W-PW/2, mx+PADDLE_SPEED)
-
   Body.setPosition(paddle,{x:Math.max(PW/2,Math.min(W-PW/2,mx)),y:H-35})
 
   if(btnMode){
@@ -388,40 +421,63 @@ function tick() {
   if(bricks.length&&bricks.every(b=>!b.gameData.alive)) endGame(true)
 }
 
-// trails — single polyline stroke per trail, ONE shadowBlur call total
 function drawTrailBall() {
-  if(ballTrail.length<2) return
-  const hue=(t*4)%360
+  const tr = ballTrail
+  const n = tr.length
+  if (n < 2) return
+  const hue = (t*4) % 360
   ctx.save()
-  ctx.globalCompositeOperation='screen'
-  ctx.shadowBlur=12; ctx.shadowColor=`hsl(${hue},100%,60%)`
-  ctx.strokeStyle=`hsl(${hue},100%,68%)`
-  ctx.lineWidth=BR*1.6; ctx.lineCap='round'; ctx.lineJoin='round'
-  ctx.globalAlpha=0.7
-  ctx.beginPath()
-  ctx.moveTo(ballTrail[0].x, ballTrail[0].y)
-  for(let i=1;i<ballTrail.length;i++){
-    ctx.globalAlpha=0.12+(i/ballTrail.length)*0.6
-    ctx.lineTo(ballTrail[i].x, ballTrail[i].y)
+  ctx.globalCompositeOperation = 'screen'
+  ctx.strokeStyle = `hsl(${hue},100%,68%)`
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  for (let i = 1; i < n; i++) {
+    const f = i/n
+    ctx.globalAlpha = 0.08 + f*0.62
+    ctx.lineWidth = Math.max(1, BR*1.7*f)
+    ctx.beginPath()
+    ctx.moveTo(tr[i-1].x, tr[i-1].y)
+    ctx.lineTo(tr[i].x, tr[i].y)
+    ctx.stroke()
   }
+  ctx.shadowBlur = 14
+  ctx.shadowColor = `hsl(${hue},100%,55%)`
+  ctx.globalAlpha = 0.55
+  ctx.lineWidth = BR*1.3
+  ctx.beginPath()
+  ctx.moveTo(tr[n-2].x, tr[n-2].y)
+  ctx.lineTo(tr[n-1].x, tr[n-1].y)
   ctx.stroke()
   ctx.restore()
 }
 
-function drawTrailPiece(p,idx) {
-  if(!p.trail||p.trail.length<2) return
-  const hue=(idx/Math.max(pieces.length,1))*360
+function drawTrailPiece(p, idx) {
+  const tr = p.trail
+  const n = tr.length
+  if (!tr || n < 2) return
+  const hue = (idx/Math.max(pieces.length,1))*360
+  const maxW = Math.max(p.w*0.5, 5)
   ctx.save()
-  ctx.globalCompositeOperation='screen'
-  ctx.shadowBlur=10; ctx.shadowColor=`hsl(${hue},100%,60%)`
-  ctx.strokeStyle=`hsl(${hue},100%,68%)`
-  ctx.lineWidth=Math.max(p.w*0.4, 4); ctx.lineCap='round'; ctx.lineJoin='round'
-  ctx.beginPath()
-  ctx.moveTo(p.trail[0].x, p.trail[0].y)
-  for(let i=1;i<p.trail.length;i++){
-    ctx.globalAlpha=0.1+(i/p.trail.length)*0.65
-    ctx.lineTo(p.trail[i].x, p.trail[i].y)
+  ctx.globalCompositeOperation = 'screen'
+  ctx.strokeStyle = `hsl(${hue},100%,68%)`
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  for (let i = 1; i < n; i++) {
+    const f = i/n
+    ctx.globalAlpha = 0.08 + f*0.6
+    ctx.lineWidth = Math.max(1, maxW*f)
+    ctx.beginPath()
+    ctx.moveTo(tr[i-1].x, tr[i-1].y)
+    ctx.lineTo(tr[i].x, tr[i].y)
+    ctx.stroke()
   }
+  ctx.shadowBlur = 12
+  ctx.shadowColor = `hsl(${hue},100%,55%)`
+  ctx.globalAlpha = 0.55
+  ctx.lineWidth = maxW*0.85
+  ctx.beginPath()
+  ctx.moveTo(tr[n-2].x, tr[n-2].y)
+  ctx.lineTo(tr[n-1].x, tr[n-1].y)
   ctx.stroke()
   ctx.restore()
 }
@@ -429,16 +485,17 @@ function drawTrailPiece(p,idx) {
 function drawDisco() {
   const DX=W/2, DY=240, DR=22, DOWN=Math.PI/2
   const beams=[
-    {a:DOWN-0.75,c:'255,20,147',r:0.13,ph:0.5},{a:DOWN-0.45,c:'0,191,255',r:0.10,ph:1.2},
-    {a:DOWN-0.15,c:'255,215,0',r:0.085,ph:2.1},{a:DOWN+0.15,c:'147,112,219',r:0.11,ph:3.0},
-    {a:DOWN+0.45,c:'0,255,127',r:0.14,ph:3.8},{a:DOWN+0.75,c:'255,99,71',r:0.09,ph:4.5},
-    {a:DOWN,c:'30,144,255',r:0.12,ph:5.2}
+    {a:DOWN-0.6,c:'255,20,147',r:0.13,ph:0.5},
+    {a:DOWN-0.25,c:'0,191,255',r:0.10,ph:1.2},
+    {a:DOWN+0.15,c:'255,215,0',r:0.085,ph:2.1},
+    {a:DOWN+0.45,c:'147,112,219',r:0.11,ph:3.0},
+    {a:DOWN+0.75,c:'0,255,127',r:0.14,ph:3.8}
   ]
   ctx.save(); ctx.globalCompositeOperation='screen'
   for(const bm of beams){
     const ang=bm.a+Math.sin(t*0.013+bm.ph)*0.20
     const alpha=Math.max(0,Math.sin(t*bm.r+bm.ph))*0.26
-    if(alpha<0.03) continue
+    if(alpha<0.04) continue
     const len=300, hw=60
     const px=-Math.sin(ang)*hw, py=Math.cos(ang)*hw
     const tx=DX+Math.cos(ang)*len, ty=DY+Math.sin(ang)*len
@@ -458,13 +515,13 @@ function drawDisco() {
   ctx.fillStyle=sg; ctx.beginPath(); ctx.arc(DX,DY,DR,0,Math.PI*2); ctx.fill()
 
   const rot=t*0.025
-  for(let lat=-Math.PI/2+0.18;lat<Math.PI/2-0.05;lat+=0.28){
-    const rr=DR*Math.cos(lat), ry=DY+DR*Math.sin(lat)*0.95, dc=Math.max(5,Math.floor(rr*0.7))
+  for(let lat=-Math.PI/2+0.25;lat<Math.PI/2-0.1;lat+=0.36){
+    const rr=DR*Math.cos(lat), ry=DY+DR*Math.sin(lat)*0.95, dc=Math.max(4,Math.floor(rr*0.55))
     for(let i=0;i<dc;i++){
-      const lon=(i/dc)*Math.PI*2+rot, z=Math.cos(lon); if(z<0.12) continue
+      const lon=(i/dc)*Math.PI*2+rot, z=Math.cos(lon); if(z<0.15) continue
       const sx=DX+rr*Math.sin(lon), sy=ry, sz=2+z*1.3
-      const sp=Math.sin(t*0.5+lat*17.3+lon*11.7)*0.5+0.5, br=Math.pow(sp,5)*0.95+0.05
-      ctx.fillStyle=`rgba(${220+br*35|0},${220+br*35|0},240,${0.35+br*0.65*z})`
+      const sp=Math.sin(t*0.5+lat*17.3+lon*11.7)*0.5+0.5, br=Math.pow(sp,5)*0.9+0.1
+      ctx.fillStyle=`rgba(${220+(br*35)|0},${220+(br*35)|0},240,${0.4+br*0.6*z})`
       ctx.fillRect(sx-sz/2,sy-sz/2,sz,sz)
     }
   }
@@ -487,10 +544,11 @@ function drawHUD() {
 function draw() {
   ctx.fillStyle='rgba(10,10,18,0.80)'; ctx.fillRect(0,0,W,H)
 
-  // subtle grid — skip for perf, every other line
   ctx.strokeStyle='rgba(255,255,255,0.02)'; ctx.lineWidth=1
-  for(let x=0;x<W;x+=80){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
-  for(let y=0;y<H;y+=80){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+  ctx.beginPath()
+  for(let x=80;x<W;x+=80){ ctx.moveTo(x,0); ctx.lineTo(x,H) }
+  for(let y=80;y<H;y+=80){ ctx.moveTo(0,y); ctx.lineTo(W,y) }
+  ctx.stroke()
 
   drawDisco()
 
@@ -541,13 +599,13 @@ canvas.addEventListener('touchmove', e => {
 },{passive:false})
 
 window.addEventListener('keydown', e => {
-  if(e.key==='ArrowLeft'||e.key==='a')  keys.left=true
-  if(e.key==='ArrowRight'||e.key==='d') keys.right=true
+  if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A')  keys.left=true
+  if(e.key==='ArrowRight'||e.key==='d'||e.key==='D') keys.right=true
   if(e.key==='ArrowLeft'||e.key==='ArrowRight') e.preventDefault()
 })
 window.addEventListener('keyup', e => {
-  if(e.key==='ArrowLeft'||e.key==='a')  keys.left=false
-  if(e.key==='ArrowRight'||e.key==='d') keys.right=false
+  if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A')  keys.left=false
+  if(e.key==='ArrowRight'||e.key==='d'||e.key==='D') keys.right=false
 })
 
 initWorld()
