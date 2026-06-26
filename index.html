@@ -62,11 +62,16 @@
         user-select: none;
         transform-origin: center center;
         -webkit-user-drag: none;
+        transition: none;
       }
       .card:active { cursor: grabbing; }
-      .card-tag { font-size: 0.65rem; letter-spacing: 0.15em; opacity: 0.35; text-transform: uppercase; margin-bottom: 0.75rem; }
       .card-title { font-size: 1.1rem; margin-bottom: 0.5rem; font-weight: bold; }
       .card-desc { font-size: 0.78rem; opacity: 0.45; line-height: 1.6; }
+
+      @keyframes neon-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
     </style>
   </head>
   <body>
@@ -83,7 +88,7 @@
       </div>
       <div class="card" id="card-1" data-href="games/dead_zone.html" draggable="false">
         <div class="card-title">Dead Zone</div>
-        <div class="card-desc">Say "bang" to shoot. no cool fetures added yet  ;&#41</div>
+        <div class="card-desc">Say "bang" to shoot. no cool fetures added yet ;&#41;</div>
       </div>
       <div class="card" id="card-2" data-href="games/breakout.html" draggable="false">
         <div class="card-title">Breakout</div>
@@ -142,25 +147,20 @@
         const engine = Engine.create({ gravity: { y: 2.5 }, enableSleeping: false });
         const world  = engine.world;
 
-        // Thick walls to prevent tunneling
         const THICK = 500;
         World.add(world, [
-
-          Bodies.rectangle(VW/2,        VH + THICK/2,      VW*3,  THICK, { isStatic: true, friction: 0.5, restitution: 0.45 }),
-      
-          Bodies.rectangle(-THICK/2,    VH/2,              THICK, VH*3,  { isStatic: true, friction: 0.2, restitution: 0.2  }),
-
-          Bodies.rectangle(VW+THICK/2,  VH/2,              THICK, VH*3,  { isStatic: true, friction: 0.2, restitution: 0.2  }),
-    
-          Bodies.rectangle(VW/2,        -1700 - THICK/2,    VW*3,  THICK, { isStatic: true, friction: 0.2, restitution: 0.3  }),
+          Bodies.rectangle(VW/2,       VH + THICK/2,    VW*3, THICK, { isStatic: true, friction: 0.5, restitution: 0.45 }),
+          Bodies.rectangle(-THICK/2,   VH/2,            THICK, VH*3, { isStatic: true, friction: 0.2, restitution: 0.2  }),
+          Bodies.rectangle(VW+THICK/2, VH/2,            THICK, VH*3, { isStatic: true, friction: 0.2, restitution: 0.2  }),
+          Bodies.rectangle(VW/2,       -1700 - THICK/2, VW*3, THICK, { isStatic: true, friction: 0.2, restitution: 0.3  }),
         ]);
 
         const startPos = [
           { x: VW * 0.20, y: 160 + H/2 },
           { x: VW * 0.50, y: 160 + H/2 },
           { x: VW * 0.80, y: 160 + H/2 },
-          { x: VW * 0.20, y: 160 + H/2 + H + 15},
-          { x: VW * 0.50, y: 160 + H/2 + H + 15},
+          { x: VW * 0.20, y: 160 + H/2 + H + 15 },
+          { x: VW * 0.50, y: 160 + H/2 + H + 15 },
         ];
 
         const cards = cardEls.map((el, i) => {
@@ -226,12 +226,9 @@
         Events.on(engine, 'afterUpdate', () => {
           cards.forEach(({ body, el, dropped }) => {
             if (!dropped) return;
-
-            // Clamp velocity every frame to prevent tunneling
             const MAX = 35;
             const spd = Math.hypot(body.velocity.x, body.velocity.y);
             if (spd > MAX) Body.setVelocity(body, { x: body.velocity.x/spd*MAX, y: body.velocity.y/spd*MAX });
-
             const { x, y } = body.position;
             el.style.left      = (x - W/2) + 'px';
             el.style.top       = (y - H/2) + 'px';
@@ -240,6 +237,41 @@
         });
 
         Runner.run(Runner.create(), engine);
+
+        // ── Synced neon flashes ───────────────────────────────
+        const neonColors = [
+          '#ff003c', '#ff6600', '#ffee00',
+          '#00ff88', '#00cfff', '#cc00ff', '#ff00aa'
+        ];
+        let colorIdx = 0;
+
+        function flashCycle() {
+          const color = neonColors[colorIdx % neonColors.length];
+          colorIdx++;
+
+          // Flash on — instant, no transition
+          cardEls.forEach(el => {
+            el.style.transition  = 'none';
+            el.style.background  = color + '18';
+            el.style.borderColor = color;
+            el.style.boxShadow   = `0 0 16px ${color}99, inset 0 0 10px ${color}22`;
+          });
+
+          // Fade out after 120ms
+          setTimeout(() => {
+            cardEls.forEach(el => {
+              el.style.transition  = 'background 0.5s, border-color 0.5s, box-shadow 0.5s';
+              el.style.background  = '#0a0a0a';
+              el.style.borderColor = 'rgba(255,255,255,0.1)';
+              el.style.boxShadow   = 'none';
+            });
+          }, 120);
+
+          // Random gap 300–1200ms before next flash
+          setTimeout(flashCycle, 300 + Math.random() * 900);
+        }
+
+        flashCycle();
       }
     </script>
   </body>
