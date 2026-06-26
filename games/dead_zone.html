@@ -23,6 +23,7 @@ let jv=0,jmp=false,gst='start';
 let weapon='gun',bullets=[],knifeSw=0,dmgAngle=0,dmgTimer=0,walkT=0,recoilY=0;
 let particles=[],dyingZombies=[];
 let shakeX=0,shakeY=0,killFlash=0;
+let spawnTimer=0,spawnInterval=300,wave=0;
 const ammoPacks=[{x:4.5,y:4.5,a:true,t:0},{x:10.5,y:3.5,a:true,t:0},{x:16.5,y:10.5,a:true,t:0},{x:6.5,y:14.5,a:true,t:0},{x:13.5,y:17.5,a:true,t:0}];
 const rot=a=>{const c=Math.cos(a),s=Math.sin(a),dx=pl.dx,ppx=pl.px;pl.dx=dx*c-pl.dy*s;pl.dy=dx*s+pl.dy*c;pl.px=ppx*c-pl.py*s;pl.py=ppx*s+pl.py*c;};
 const mkZ=(x,y)=>({x,y,hp:2,fl:0,sp:0.013+Math.random()*0.008,wa:Math.random()*6.28,wt:0,at:60,dance:Math.random()*6.28,griddy:0,gp:0});
@@ -59,41 +60,32 @@ const ZSZ=64;
 function bldSpr(hp,fl){const b=new Uint8ClampedArray(ZSZ*ZSZ*4);for(let ty=0;ty<ZSZ;ty++)for(let tx=0;tx<ZSZ;tx++){const[r,g,bb,a]=zpx(tx/ZSZ,ty/ZSZ,hp,fl);const i=(ty*ZSZ+tx)*4;b[i]=r;b[i+1]=g;b[i+2]=bb;b[i+3]=a;}return b;}
 const SP={'2n':bldSpr(2,false),'1n':bldSpr(1,false),'2f':bldSpr(2,true),'1f':bldSpr(1,true)};
 
-// ===== THE GRIDDY: death-dance sprite frames =====
-// light bounce, alternating feet, arms swinging like a run, "glasses" rings by the eyes
 const segD=(px,py,ax,ay,bx,by)=>{const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;let t=l2?((px-ax)*dx+(py-ay)*dy)/l2:0;t=t<0?0:t>1?1:t;const cx0=ax+t*dx,cy0=ay+t*dy;return Math.hypot(px-cx0,py-cy0);};
 function zpxGriddy(tx,ty,sw,ar){
   const baseV=150;
   const skin=[baseV*0.5|0,baseV*0.9|0,baseV*0.45|0,255];
   const skinDk=[baseV*0.4|0,baseV*0.72|0,baseV*0.36|0,255];
-  const lean=sw*0.05, hcx=0.5+sw*0.05;
-  const lhX=hcx-0.20, lhY=0.13-ar*0.05;          // left "glasses" hand by the eye
-  const rhX=hcx+0.20, rhY=0.13+ar*0.05;          // right hand, pumps opposite
-  const lsX=0.34+lean, rsX=0.66+lean, shY=0.34;  // shoulders
-  const hipL=0.44+sw*0.06, hipR=0.56+sw*0.06, hipY=0.60;
-  const lfX=0.40-sw*0.11, rfX=0.60-sw*0.11, ftY=0.92;  // feet swivel side to side
-  const lLift=ar>0?0.025:0, rLift=ar<0?0.025:0;        // foot swap / bounce
-  // head
+  const lean=sw*0.05,hcx=0.5+sw*0.05;
+  const lhX=hcx-0.20,lhY=0.13-ar*0.05;
+  const rhX=hcx+0.20,rhY=0.13+ar*0.05;
+  const lsX=0.34+lean,rsX=0.66+lean,shY=0.34;
+  const hipL=0.44+sw*0.06,hipR=0.56+sw*0.06,hipY=0.60;
+  const lfX=0.40-sw*0.11,rfX=0.60-sw*0.11,ftY=0.92;
+  const lLift=ar>0?0.025:0,rLift=ar<0?0.025:0;
   if(ty>0.02&&ty<0.24&&Math.hypot((tx-hcx)/0.18,(ty-0.13)/0.11)<1){
     if(ty>0.10&&ty<0.15&&(Math.abs(tx-(hcx-0.09))<0.045||Math.abs(tx-(hcx+0.09))<0.045))return[255,240,80,255];
     if(ty>0.185&&ty<0.215&&Math.abs(tx-hcx)<0.10)return[255,120,120,255];
     return skin;
   }
-  // griddy "glasses" rings beside the eyes
-  const rL=Math.hypot(tx-lhX,ty-lhY), rR=Math.hypot(tx-rhX,ty-rhY);
+  const rL=Math.hypot(tx-lhX,ty-lhY),rR=Math.hypot(tx-rhX,ty-rhY);
   if(rL<0.07&&rL>0.034)return skin;
   if(rR<0.07&&rR>0.034)return skin;
-  // forearms shoulder -> hand (the swinging run motion)
   if(segD(tx,ty,lsX,shY,lhX,lhY)<0.045)return skinDk;
   if(segD(tx,ty,rsX,shY,rhX,rhY)<0.045)return skinDk;
-  // torso
   if(ty>0.30&&ty<0.60&&Math.abs(tx-(0.5+lean))<0.15)return[44,56,44,255];
-  // shoulder caps
   if(ty>0.30&&ty<0.42&&(Math.abs(tx-lsX)<0.05||Math.abs(tx-rsX)<0.05))return skinDk;
-  // legs hip -> foot
   if(segD(tx,ty,hipL,hipY,lfX,ftY-lLift)<0.055)return[34,44,34,255];
   if(segD(tx,ty,hipR,hipY,rfX,ftY-rLift)<0.055)return[34,44,34,255];
-  // feet
   if(ty>ftY-lLift-0.03&&Math.abs(tx-lfX)<0.065)return[20,28,20,255];
   if(ty>ftY-rLift-0.03&&Math.abs(tx-rfX)<0.065)return[20,28,20,255];
   return[0,0,0,0];
@@ -102,8 +94,8 @@ const GRIDDY_N=8;
 function bldGriddy(){
   const frames=[];
   for(let f=0;f<GRIDDY_N;f++){
-    const ph=f/GRIDDY_N, sw=Math.sin(ph*Math.PI*2), ar=Math.cos(ph*Math.PI*2);
-    const hue=ph*Math.PI*2, tr=1+0.22*Math.sin(hue), tg=1+0.22*Math.sin(hue+2.09), tb=1+0.22*Math.sin(hue+4.18); // disco tint
+    const ph=f/GRIDDY_N,sw=Math.sin(ph*Math.PI*2),ar=Math.cos(ph*Math.PI*2);
+    const hue=ph*Math.PI*2,tr=1+0.22*Math.sin(hue),tg=1+0.22*Math.sin(hue+2.09),tb=1+0.22*Math.sin(hue+4.18);
     const b=new Uint8ClampedArray(ZSZ*ZSZ*4);
     for(let ty=0;ty<ZSZ;ty++)for(let tx=0;tx<ZSZ;tx++){
       const[r,g,bb,a]=zpxGriddy(tx/ZSZ,ty/ZSZ,sw,ar);const i=(ty*ZSZ+tx)*4;
@@ -114,7 +106,6 @@ function bldGriddy(){
   return frames;
 }
 const GRIDDY=bldGriddy();
-// =================================================
 
 const AP_SZ=32;
 function bldAmmoSpr(){const b=new Uint8ClampedArray(AP_SZ*AP_SZ*4);for(let ty=0;ty<AP_SZ;ty++)for(let tx=0;tx<AP_SZ;tx++){const i=(ty*AP_SZ+tx)*4,brd=tx<2||tx>AP_SZ-3||ty<2||ty>AP_SZ-3,cross=(tx>13&&tx<18&&ty>4&&ty<AP_SZ-5)||(tx>4&&tx<AP_SZ-5&&ty>13&&ty<18);if(brd){b[i]=60;b[i+1]=120;b[i+2]=50;b[i+3]=255;}else if(cross){b[i]=255;b[i+1]=215;b[i+2]=40;b[i+3]=255;}else{b[i]=30;b[i+1]=75;b[i+2]=28;b[i+3]=255;}}return b;}
@@ -202,7 +193,6 @@ const render=()=>{
       const z=o,sh2=Math.min(RH*3,Math.abs(RH/ty2|0));
       let spr,danceBob,danceWiggle;
       if(z.griddy){
-        // dancing the griddy: cycle frames + lively bounce/sway
         spr=GRIDDY[(z.gp|0)%GRIDDY_N];
         danceBob=(Math.abs(Math.sin(z.gp*0.7))*sh2*0.12)|0;
         danceWiggle=(Math.sin(z.gp*0.55)*sh2*0.06)|0;
@@ -255,7 +245,6 @@ const render=()=>{
   shakeX*=0.72;shakeY*=0.72;
 
   for(const p of particles){cx.fillStyle=`rgba(${p.r},${p.g},${p.b},${Math.min(1,p.life/12)})`;cx.fillRect(p.sx|0,p.sy|0,p.sz,p.sz);}
-
   if(pl.dmg>0){cx.fillStyle=`rgba(200,0,0,${pl.dmg/26*0.48})`;cx.fillRect(0,0,CW,CH);}
   if(killFlash>0){cx.fillStyle=`rgba(255,100,0,${killFlash/12*0.38})`;cx.fillRect(0,0,CW,CH);}
 
@@ -302,13 +291,15 @@ const render=()=>{
   cx.fillText('[9] swap weapon',175,CH-5);
   cx.fillStyle=alive>3?'#ff6644':'#ffcc55';cx.textAlign='right';cx.font="bold 14px 'Courier New',monospace";
   cx.fillText('ZOMBIES '+alive,CW-12,CH-17);
+  cx.fillStyle='#aaaaff';cx.font="10px 'Courier New',monospace";
+  cx.fillText('WAVE '+wave,CW-12,CH-5);
 };
+
 const MS=0.055,RS=0.040;
-const DANCE_DUR=120, GRIDDY_SPEED=0.18;
+const DANCE_DUR=120,GRIDDY_SPEED=0.18;
 const update=()=>{
   if(gst!=='play')return;
   if(pl.dead){gst='over';return;}
-  if(!ZS.length&&!dyingZombies.length){gst='win';return;}
   if(pl.scd>0)pl.scd--;if(pl.muzz>0)pl.muzz--;if(pl.dmg>0)pl.dmg--;if(dmgTimer>0)dmgTimer--;if(knifeSw>0)knifeSw--;
   if(killFlash>0)killFlash--;
   if(K['KeyE']&&pl.scd===0)shoot();
@@ -337,9 +328,7 @@ const update=()=>{
     if(!hit)nb.push(b);
   }
   bullets=nb;
-  // a freshly downed zombie breaks into the griddy instead of dropping
   for(const z of ZS){if(z.hp<=0&&!z.griddy){z.griddy=DANCE_DUR;z.gp=0;z.fl=0;}}
-  // run the routine; when the music stops, they finally hit the floor
   const survivors=[];
   for(const z of ZS){
     if(z.griddy){
@@ -349,7 +338,6 @@ const update=()=>{
     survivors.push(z);
   }
   ZS=survivors;
-  // AI + bites only for the living (dancers are too busy showing off)
   for(const z of ZS){
     if(z.griddy)continue;
     if(z.fl>0)z.fl--;if(z.at>0)z.at--;
@@ -359,38 +347,40 @@ const update=()=>{
     if(d<0.75&&z.at<=0){pl.hp-=8;pl.dmg=22;z.at=55;if(pl.hp<=0)pl.dead=true;dmgAngle=Math.atan2(z.y-pl.y,z.x-pl.x)-Math.atan2(pl.dy,pl.dx);dmgTimer=80;}
   }
   for(const ap of ammoPacks){
-    if(!ap.a){if(++ap.t>=1800)ap.a=true, ap.t=0;continue;
+    if(!ap.a){if(++ap.t>=1800){ap.a=true;ap.t=0;}continue;}
     const ddx=pl.x-ap.x,ddy=pl.y-ap.y;
     if(ddx*ddx+ddy*ddy<0.75*0.75){ap.a=false;ap.t=0;pl.ammo=Math.min(99,pl.ammo+10);}
-    }
+  }
   particles=particles.filter(p=>{p.sx+=p.vx;p.sy+=p.vy;p.vy+=0.22;p.vx*=0.97;p.life--;return p.life>0;});
   spawnTimer++;
-  if(spawtimer>=spawnInterval){
-    spawnTimer=0; wave++;
+  if(spawnTimer>=spawnInterval){
+    spawnTimer=0;wave++;
     const spawns=[[1.5,1.5],[18.5,1.5],[1.5,18.5],[18.5,18.5],[10.5,1.5],[1.5,10.5],[18.5,10.5],[10.5,18.5]];
     const far=spawns.filter(s=>Math.hypot(s[0]-pl.x,s[1]-pl.y)>6);
     const sp=far[Math.random()*far.length|0];
     ZS.push(mkZ(sp[0],sp[1]));
     if(wave%5===0&&spawnInterval>80)spawnInterval=Math.max(80,spawnInterval-20);
-    
   }
 };
+
 const BS=Array.from({length:22},()=>({x:Math.random()*CW,y:Math.random()*CH,r:3+Math.random()*13,a:0.12+Math.random()*0.28,rr:130+Math.random()*65|0}));
 const drawStart=()=>{
   cx.fillStyle='#000';cx.fillRect(0,0,CW,CH);
   for(const b of BS){cx.fillStyle=`rgba(${b.rr},0,0,${b.a})`;cx.beginPath();cx.arc(b.x,b.y,b.r,0,6.28);cx.fill();}
   cx.textAlign='center';cx.fillStyle='#bb1111';cx.font="bold 60px 'Courier New',monospace";cx.fillText('DEAD ZONE',CW/2,CH*0.35);
   cx.fillStyle='#555';cx.font="11px 'Courier New',monospace";
-  cx.fillText('WASD: Move  |  Arrows: Look  |  E: Shoot  |    9: Swap Weapon',CW/2,CH*0.52);
+  cx.fillText('WASD: Move  |  Arrows: Look  |  E: Shoot/Slash  |  Space: Jump  |  9: Swap Weapon',CW/2,CH*0.52);
+  cx.fillText('GUN: bouncing bullets (max 4 bounces)  |  KNIFE: 1 hit, very close range',CW/2,CH*0.62);
+  cx.fillStyle='#cc66cc';cx.fillText('Downed zombies hit the GRIDDY before they drop. Zombies spawn forever.',CW/2,CH*0.71);
   cx.fillStyle='#ccc';cx.font="bold 16px 'Courier New',monospace";cx.fillText('[ PRESS ANY KEY TO START ]',CW/2,CH*0.86);
 };
 const drawEnd=()=>{
   cx.fillStyle='rgba(0,0,0,0.82)';cx.fillRect(0,0,CW,CH);cx.textAlign='center';
-  if(gst==='over'){cx.fillStyle='#ff2222';cx.font="bold 54px 'Courier New',monospace";cx.fillText('YOU DIED',CW/2,CH/2-22);cx.fillStyle='#555';cx.font="15px 'Courier New',monospace";cx.fillText('Kills: '+pl.kills,CW/2,CH/2+20);}
-  else{cx.fillStyle='#33ff66';cx.font="bold 44px 'Courier New',monospace";cx.fillText('AREA CLEAR!',CW/2,CH/2-22);cx.fillStyle='#555';cx.font="15px 'Courier New',monospace";cx.fillText('All '+pl.kills+' zombies danced their last.',CW/2,CH/2+20);}
+  cx.fillStyle='#ff2222';cx.font="bold 54px 'Courier New',monospace";cx.fillText('YOU DIED',CW/2,CH/2-22);
+  cx.fillStyle='#555';cx.font="15px 'Courier New',monospace";cx.fillText('Kills: '+pl.kills+' | Wave: '+wave,CW/2,CH/2+20);
   cx.fillStyle='#383838';cx.font="11px 'Courier New',monospace";cx.fillText('Refresh to play again',CW/2,CH/2+56);
 };
-const loop=()=>{update();gst==='start'?drawStart():(render(),gst==='play'&&drawEnd());requestAnimationFrame(loop);};
+const loop=()=>{update();gst==='start'?drawStart():(render(),gst==='over'&&drawEnd());requestAnimationFrame(loop);};
 loop();
 </script>
 </body>
